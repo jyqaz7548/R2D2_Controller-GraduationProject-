@@ -30,28 +30,34 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             R2D2Theme {
-                val btState      by vm.btState.collectAsState()
-                val isManualMode by vm.isManualMode.collectAsState()
-                val isTracking   by vm.isTracking.collectAsState()
-                val isObstacle   by vm.isObstacle.collectAsState()
-                val speed        by vm.speed.collectAsState()
+                val btState          by vm.btState.collectAsState()
+                val isManualMode     by vm.isManualMode.collectAsState()
+                val isTracking       by vm.isTracking.collectAsState()
+                val speed            by vm.speed.collectAsState()
+                val bodyAngle        by vm.bodyAngle.collectAsState()
+                val targetBodyAngle  by vm.targetBodyAngle.collectAsState()
+                val bodyLimitError   by vm.bodyLimitError.collectAsState()
 
                 ControllerScreen(
-                    btState           = btState,
-                    isManualMode      = isManualMode,
-                    isTracking        = isTracking,
-                    isObstacle        = isObstacle,
-                    speed             = speed,
-                    pairedDevices     = vm.pairedDevices,
-                    onConnect         = vm::connect,
-                    onDisconnect      = vm::disconnect,
-                    onJoystickMove    = vm::sendJoystick,
-                    onJoystickRelease = vm::sendStop,
-                    onToggleMode      = vm::toggleMode,
-                    onSetSpeed        = vm::setSpeed,
-                    onSayHello        = vm::sayHello,
-                    onPlayMusic       = vm::playMusic,
-                    onHorn            = vm::horn,
+                    btState              = btState,
+                    isManualMode         = isManualMode,
+                    isTracking           = isTracking,
+                    speed                = speed,
+                    pairedDevices        = vm.pairedDevices,
+                    bodyAngle            = bodyAngle,
+                    targetBodyAngle      = targetBodyAngle,
+                    bodyLimitError       = bodyLimitError,
+                    onConnect            = vm::connect,
+                    onDisconnect         = vm::disconnect,
+                    onJoystickMove       = vm::sendJoystick,
+                    onJoystickRelease    = vm::sendStop,
+                    onToggleMode         = vm::toggleMode,
+                    onSetSpeed           = vm::setSpeed,
+                    onSetTargetBodyAngle = vm::setTargetBodyAngle,
+                    onBodyHome           = vm::bodyHome,
+                    onSayHello           = vm::sayHello,
+                    onPlayMusic          = vm::playMusic,
+                    onHorn               = vm::horn,
                 )
             }
         }
