@@ -1,22 +1,23 @@
 package com.r2d2.controller
 
 /**
- * ArduD2 명령 프로토콜 (R2D2_main_v5 기준)
+ * R2D2 명령 프로토콜 (R2D2_main_v6 기준)
  *
- * App → Arduino (Serial1):
- *   F{0-9}  전진      B{0-9}  후진
- *   L       좌회전    R       우회전    S  정지
- *   M       수동 모드  A       자동(팔로잉) 모드
- *   1       Say Hello  2  Play Music  3  Horn
- *   T       상체 시계방향 15도
- *   U       상체 반시계방향 15도
- *   H       상체 원점 복귀
- *   C       타겟 초기화
+ * App → Arduino (Serial1, '\n' 종료):
+ *   F{0-9}     전진      B{0-9}  후진
+ *   L          좌회전    R       우회전    S  정지
+ *   M          수동 모드  A       자동(팔로잉) 모드
+ *   1          Say Hello  2  Play Music  3  Horn
+ *   G{angle}   상체 절대 각도 이동 (예: G90, G-45)  ← v6 신규
+ *   T          상체 시계방향 15도   (하위 호환용)
+ *   U          상체 반시계방향 15도 (하위 호환용)
+ *   H          상체 원점 복귀
+ *   C          타겟 초기화
  *
  * Arduino → App (Serial1.println):
  *   "TRACKING:1"     타겟 감지
  *   "TRACKING:0"     타겟 사라짐
- *   "BODY:{angle}"   상체 회전 완료 + 현재 각도 (예: "BODY:45")
+ *   "BODY:{angle}"   현재 각도 보고 (도달 시 + 이동 중 500ms마다)
  *   "E:BODY_LIMIT"   상체 최대 회전각 초과 에러
  */
 object RobotCommands {
@@ -37,8 +38,10 @@ object RobotCommands {
     fun horn()       = "3"
 
     // ── 상체 제어 ───────────────────────────────────────────────────────
-    fun bodyRight()    = "T"   // 시계방향 15도
-    fun bodyLeft()     = "U"   // 반시계방향 15도
+    /** v6: 절대 각도로 직접 이동 (-350 ~ +350) */
+    fun bodyGoto(angle: Int)  = "G${angle.coerceIn(-350, 350)}"
+    fun bodyRight()    = "T"   // 시계방향 15도 (하위 호환)
+    fun bodyLeft()     = "U"   // 반시계방향 15도 (하위 호환)
     fun bodyHome()     = "H"   // 원점 복귀
     fun clearTarget()  = "C"   // 타겟 초기화
 

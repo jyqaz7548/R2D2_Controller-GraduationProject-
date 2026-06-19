@@ -9,7 +9,7 @@ import com.r2d2.controller.RobotCommands
 import com.r2d2.controller.bluetooth.BluetoothService
 import com.r2d2.controller.bluetooth.BtState
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.delay   // limitErrorJob 타임아웃에 사용
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -20,7 +20,7 @@ enum class SpeedPreset(val label: String, val mult: Float) {
     HIGH("HIGH", 1.0f)
 }
 
-const val BODY_STEP_DEG = 15   // Arduino는 T/U 한 번에 15도씩 이동
+const val BODY_STEP_DEG = 15   // 슬라이더 스냅 단위 (G 명령 전송 전 반올림)
 const val BODY_MAX_DEG  = 350  // Arduino 각도 제한
 
 @SuppressLint("MissingPermission")
@@ -52,9 +52,6 @@ class ControllerViewModel(app: Application) : AndroidViewModel(app) {
     private val _bodyLimitError = MutableStateFlow(false)
     val bodyLimitError = _bodyLimitError.asStateFlow()
 
-    /** Arduino가 상체를 이동 중인지 (BODY:{angle} 응답 전까지 true) */
-    private var bodyMoving = false
-
     // ── 기타 ───────────────────────────────────────────────────────────
     private var lastCmd = ""
     private var limitErrorJob: Job? = null
@@ -68,19 +65,17 @@ class ControllerViewModel(app: Application) : AndroidViewModel(app) {
                     line == "TRACKING:1" -> _isTracking.value = true
                     line == "TRACKING:0" -> _isTracking.value = false
 
+                    // v6: Arduino가 도달 시 + 이동 중 500ms마다 BODY:{angle} 전송
+                    // 앱은 그냥 현재 각도만 업데이트 (추가 명령 전송 불필요)
                     line.startsWith("BODY:") -> {
                         val angle = line.removePrefix("BODY:").trim().toIntOrNull() ?: return@collect
                         _bodyAngle.value = angle
-                        bodyMoving = false
-                        // 목표 각도에 아직 못 도달했으면 다음 명령 전송
-                        sendNextBodyStep()
                     }
 
                     line == "E:BODY_LIMIT" -> {
                         _bodyLimitError.value = true
-                        // 현재 각도를 목표로 리셋 (더 이상 명령 안 보냄)
+                        // 현재 각도를 목표로 리셋
                         _targetBodyAngle.value = _bodyAngle.value
-                        bodyMoving = false
                         // 3초 후 에러 표시 해제
                         limitErrorJob?.cancel()
                         limitErrorJob = viewModelScope.launch {
@@ -103,7 +98,6 @@ class ControllerViewModel(app: Application) : AndroidViewModel(app) {
                     _isTracking.value = false
                     _bodyAngle.value = 0
                     _targetBodyAngle.value = 0
-                    bodyMoving = false
                 }
                 prev = s
             }
@@ -152,32 +146,20 @@ class ControllerViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * 슬라이더가 목표 각도를 설정 (15도 단위 스냅)
-     * 설정 즉시 자동으로 T/U 명령 전송 시작
+     * v6: G{angle} 명령 한 번으로 Arduino에 절대 각도 전달
+     * Arduino가 내부적으로 회전 처리 후 BODY:{angle} 응답
      */
     fun setTargetBodyAngle(angleDeg: Int) {
         val snapped = ((angleDeg / BODY_STEP_DEG) * BODY_STEP_DEG)
             .coerceIn(-BODY_MAX_DEG, BODY_MAX_DEG)
         _targetBodyAngle.value = snapped
-        sendNextBodyStep()
+        send(RobotCommands.bodyGoto(snapped))
     }
 
     /** 상체 원점 복귀 (H 명령) */
     fun bodyHome() {
         _targetBodyAngle.value = 0
-        bodyMoving = true
         send(RobotCommands.bodyHome())
-    }
-
-    /**
-     * 현재각도 → 목표각도로 한 스텝씩 이동
-     * Arduino가 BODY:{angle} 응답 올 때마다 호출됨
-     */
-    private fun sendNextBodyStep() {
-        if (bodyMoving) return
-        val delta = _targetBodyAngle.value - _bodyAngle.value
-        if (Math.abs(delta) < BODY_STEP_DEG / 2) return   // 이미 도달
-        bodyMoving = true
-        send(if (delta > 0) RobotCommands.bodyRight() else RobotCommands.bodyLeft())
     }
 
     // ─── 내부 ────────────────────────────────────────────────────────
