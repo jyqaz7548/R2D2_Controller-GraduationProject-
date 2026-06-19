@@ -13,6 +13,7 @@ val CardBg      = Color(0xFF111827)
 val BorderColor = Color(0xFF1F2937)
 val MutedText   = Color(0xFF6B7280)
 val DangerRed   = Color(0xFFEF4444)
+val NeonOrange  = Color(0xFFF97316)
 
 private val DarkColors = darkColorScheme(
     primary          = NeonCyan,

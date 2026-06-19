@@ -227,14 +227,16 @@ export function RobotController() {
         )}
       </div>
 
-      {/* 상체 슬라이더 */}
-      <BodyControl
-        currentAngle={bodyAngle}
-        targetAngle={targetBodyAngle}
-        limitError={bodyLimitError}
-        onSetTarget={handleSetTargetBodyAngle}
-        onHome={handleBodyHome}
-      />
+      {/* 상체 슬라이더 (수동 모드일 때만) */}
+      {isManualMode && (
+        <BodyControl
+          currentAngle={bodyAngle}
+          targetAngle={targetBodyAngle}
+          limitError={bodyLimitError}
+          onSetTarget={handleSetTargetBodyAngle}
+          onHome={handleBodyHome}
+        />
+      )}
 
       {/* 사운드 */}
       <SoundEffects
