@@ -5,31 +5,41 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-// 네온 사이버 팔레트 (웹 앱과 동일 컨셉)
-val NeonCyan    = Color(0xFF00FFEE)
-val NeonGreen   = Color(0xFF39FF14)
-val DarkBg      = Color(0xFF0A0E1A)
-val CardBg      = Color(0xFF111827)
-val BorderColor = Color(0xFF1F2937)
-val MutedText   = Color(0xFF6B7280)
-val DangerRed   = Color(0xFFEF4444)
-val NeonOrange  = Color(0xFFF97316)
+// ── 깡통 로봇 팔레트 ────────────────────────────────────────────────────────
+val SteelDark     = Color(0xFF1A1A1C)   // 배경 — 다크 아이언
+val SteelMid      = Color(0xFF252527)   // 카드 / 패널
+val SteelLight    = Color(0xFF3C3C40)   // 구분선 / 테두리
+val RustOrange    = Color(0xFFD4703A)   // 주 강조 — 녹슨 오렌지
+val AmberYellow   = Color(0xFFD4A843)   // 보조 강조 — 호박색
+val CreamText     = Color(0xFFCFC5AC)   // 메인 텍스트 — 크림
+val MutedBrown    = Color(0xFF7A7060)   // 보조 텍스트
+val DangerRed     = Color(0xFFAA3333)   // 위험
+val MilitaryGreen = Color(0xFF6B8C5A)   // 연결됨 / 추적 활성
 
-private val DarkColors = darkColorScheme(
-    primary          = NeonCyan,
-    secondary        = NeonGreen,
-    background       = DarkBg,
-    surface          = CardBg,
-    onBackground     = Color.White,
-    onSurface        = Color.White,
-    outline          = BorderColor,
-    error            = DangerRed,
+// 하위 호환 alias (ControllerScreen 참조용)
+val DarkBg      = SteelDark
+val CardBg      = SteelMid
+val BorderColor = SteelLight
+val MutedText   = MutedBrown
+val NeonCyan    = AmberYellow   // 조이스틱 색
+val NeonGreen   = MilitaryGreen
+val NeonOrange  = RustOrange
+
+private val TinRobotColors = darkColorScheme(
+    primary      = RustOrange,
+    secondary    = AmberYellow,
+    background   = SteelDark,
+    surface      = SteelMid,
+    onBackground = CreamText,
+    onSurface    = CreamText,
+    outline      = SteelLight,
+    error        = DangerRed,
 )
 
 @Composable
 fun R2D2Theme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = DarkColors,
+        colorScheme = TinRobotColors,
         content     = content,
     )
 }

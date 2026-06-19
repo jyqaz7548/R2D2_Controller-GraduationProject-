@@ -33,9 +33,10 @@ object RobotCommands {
     fun autoMode()   = "A"
 
     // ── 사운드 ──────────────────────────────────────────────────────────
-    fun sayHello()   = "1"
-    fun playMusic()  = "2"
-    fun horn()       = "3"
+    fun sayHello()   = "1"   // 0001~0006 랜덤
+    fun playMusic()  = "2"   // 0007 → 0008 → 정지 (누를 때마다 순환)
+    fun dance()      = "3"   // 0009 댄스
+    fun shutdown()   = "Z"   // 0012 종료음 (연결 해제 직전 전송)
 
     // ── 상체 제어 ───────────────────────────────────────────────────────
     /** v6: 절대 각도로 직접 이동 (-350 ~ +350) */
@@ -60,7 +61,7 @@ object RobotCommands {
         return if (ay >= ax) {
             if (y > 0) "F$spd" else "B$spd"
         } else {
-            if (x > 0) "R" else "L"
+            if (x > 0) "R$spd" else "L$spd"
         }
     }
 }

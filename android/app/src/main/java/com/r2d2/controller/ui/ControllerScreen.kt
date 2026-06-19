@@ -26,6 +26,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -37,6 +40,14 @@ import com.r2d2.controller.bluetooth.BtState
 import com.r2d2.controller.ui.theme.*
 import com.r2d2.controller.viewmodel.BODY_MAX_DEG
 import com.r2d2.controller.viewmodel.SpeedPreset
+
+// ─── 패널 외곽선 색 ───────────────────────────────────────────────────────────
+private val PanelBorder  = Color(0xFF4A4640)
+private val PanelInner   = Color(0xFF2E2C2A)
+private val BoltColor    = Color(0xFF5A5650)
+private val ActiveAmber  = AmberYellow
+private val ActiveGreen  = MilitaryGreen
+private val ActiveRust   = RustOrange
 
 @Composable
 fun ControllerScreen(
@@ -58,7 +69,7 @@ fun ControllerScreen(
     onBodyHome: () -> Unit,
     onSayHello: () -> Unit,
     onPlayMusic: () -> Unit,
-    onHorn: () -> Unit,
+    onDance: () -> Unit,
 ) {
     var showDevicePicker by remember { mutableStateOf(false) }
     val isConnected = btState is BtState.Connected
@@ -66,13 +77,13 @@ fun ControllerScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(DarkBg)
+            .background(SteelDark)
             .statusBarsPadding()
             .navigationBarsPadding()
             .verticalScroll(rememberScrollState()),
     ) {
         // ── 상태 바 ──────────────────────────────────────────────────
-        StatusBar(
+        TinStatusBar(
             btState        = btState,
             onConnectClick = {
                 if (isConnected) onDisconnect()
@@ -80,77 +91,19 @@ fun ControllerScreen(
             },
         )
 
-        // ── 헤더 ─────────────────────────────────────────────────────
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 14.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(NeonGreen.copy(alpha = 0.1f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Filled.SmartToy,
-                    contentDescription = null,
-                    tint = NeonGreen,
-                    modifier = Modifier.size(22.dp),
-                )
-            }
-            Spacer(Modifier.width(10.dp))
-            Text(
-                text       = "ArduD2 컨트롤러",
-                color      = Color.White,
-                fontSize   = 18.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
-            )
-        }
-
-        HorizontalDivider(color = BorderColor)
-
         // ── 모드 토글 ────────────────────────────────────────────────
-        ModeToggleSection(isManualMode = isManualMode, onToggle = onToggleMode)
+        TinModeToggle(isManualMode = isManualMode, onToggle = onToggleMode)
 
-        // ── 속도 프리셋 (수동 모드) ──────────────────────────────────
+        PanelDivider()
+
+        // ── 속도 프리셋 ──────────────────────────────────────────────
         AnimatedVisibility(visible = isManualMode) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-            ) {
-                SpeedPreset.entries.forEach { preset ->
-                    val active = speed == preset
-                    Box(
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .background(if (active) NeonCyan.copy(alpha = 0.2f) else Color.Transparent)
-                            .border(1.dp, if (active) NeonCyan else BorderColor, CircleShape)
-                            .clickable { onSetSpeed(preset) }
-                            .padding(horizontal = 20.dp, vertical = 6.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text       = preset.label,
-                            color      = if (active) NeonCyan else MutedText,
-                            fontSize   = 11.sp,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-                }
-            }
+            SpeedPanel(speed = speed, onSetSpeed = onSetSpeed)
         }
 
-        HorizontalDivider(color = BorderColor, modifier = Modifier.padding(horizontal = 24.dp))
+        PanelDivider()
 
-        // ── 조이스틱 / 트래킹 상태 ──────────────────────────────────
+        // ── 조이스틱 / 트래킹 ────────────────────────────────────────
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -164,438 +117,427 @@ fun ControllerScreen(
                     onRelease = onJoystickRelease,
                 )
             } else {
-                TrackingStatusView(isTracking = isTracking)
+                TinTrackingView(isTracking = isTracking)
             }
         }
 
-        HorizontalDivider(color = BorderColor)
+        PanelDivider()
 
-        // ── 상체 제어 슬라이더 (수동 모드일 때만) ────────────────────
+        // ── 상체 슬라이더 ────────────────────────────────────────────
         if (isManualMode) {
-            BodyControlSection(
+            TinBodyControl(
                 currentAngle = bodyAngle,
                 targetAngle  = targetBodyAngle,
                 limitError   = bodyLimitError,
                 onSetTarget  = onSetTargetBodyAngle,
                 onHome       = onBodyHome,
             )
-            HorizontalDivider(color = BorderColor)
+            PanelDivider()
         }
 
-        // ── 사운드 버튼 ──────────────────────────────────────────────
-        SoundButtonsSection(
+        // ── 사운드 패널 ──────────────────────────────────────────────
+        TinSoundPanel(
             onSayHello  = onSayHello,
             onPlayMusic = onPlayMusic,
-            onHorn      = onHorn,
+            onDance     = onDance,
         )
+
+        Spacer(Modifier.height(16.dp))
     }
 
-    // ── 장치 선택 다이얼로그 ─────────────────────────────────────────
     if (showDevicePicker) {
-        DevicePickerDialog(
+        TinDevicePicker(
             devices   = pairedDevices,
-            onSelect  = { device ->
-                showDevicePicker = false
-                onConnect(device)
-            },
+            onSelect  = { device -> showDevicePicker = false; onConnect(device) },
             onDismiss = { showDevicePicker = false },
         )
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 상태 바 (웹 버전: Wifi 아이콘 + Plug/Unplug 버튼)
+// 공통 유틸
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun StatusBar(
-    btState: BtState,
-    onConnectClick: () -> Unit,
-) {
+private fun PanelDivider() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(2.dp)
+            .background(PanelBorder),
+    )
+}
+
+@Composable
+private fun RivetRow(modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 10.dp, vertical = 3.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        repeat(8) {
+            Box(
+                modifier = Modifier
+                    .size(5.dp)
+                    .clip(CircleShape)
+                    .background(BoltColor),
+            )
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 상태 바
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun TinStatusBar(btState: BtState, onConnectClick: () -> Unit) {
     val isConnected  = btState is BtState.Connected
     val isConnecting = btState is BtState.Connecting
 
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.5f,
-        targetValue  = 1f,
-        animationSpec = infiniteRepeatable(
-            animation  = tween(1000),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "dotPulse",
+    val infiniteTransition = rememberInfiniteTransition(label = "blink")
+    val blinkAlpha by infiniteTransition.animateFloat(
+        initialValue  = 0.4f,
+        targetValue   = 1f,
+        animationSpec = infiniteRepeatable(tween(800), RepeatMode.Reverse),
+        label         = "blink",
     )
 
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(CardBg)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .background(PanelInner),
     ) {
-        // 왼쪽: Wifi 아이콘 + 상태 텍스트
+        RivetRow()
         Row(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Box {
-                Icon(
-                    imageVector = if (isConnected) Icons.Filled.Wifi else Icons.Filled.WifiOff,
-                    contentDescription = null,
-                    tint     = if (isConnected) NeonGreen else MutedText,
-                    modifier = Modifier.size(20.dp),
-                )
-                if (isConnected) {
-                    Box(
-                        modifier = Modifier
-                            .size(7.dp)
-                            .align(Alignment.TopEnd)
-                            .clip(CircleShape)
-                            .background(NeonGreen.copy(alpha = pulseAlpha)),
-                    )
-                }
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Text("상태:", color = MutedText, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                Text(
-                    text = when {
-                        isConnecting -> "연결 중..."
-                        isConnected  -> "연결됨"
-                        btState is BtState.Error -> "오류"
-                        else         -> "연결 안 됨"
-                    },
-                    color = if (isConnected) NeonGreen else MutedText,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-        }
-
-        // 오른쪽: 초록 dot (연결시) + 버튼
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            if (isConnected) {
-                Box(
-                    modifier = Modifier
-                        .size(12.dp)
-                        .clip(CircleShape)
-                        .background(NeonGreen.copy(alpha = pulseAlpha)),
-                )
-            }
-
-            val btnColor = if (isConnected) DangerRed else NeonGreen
+            // 상태 표시등
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .border(1.dp, btnColor.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                    .size(14.dp)
+                    .clip(CircleShape)
+                    .background(
+                        when {
+                            isConnected  -> ActiveGreen.copy(alpha = blinkAlpha)
+                            isConnecting -> ActiveAmber.copy(alpha = blinkAlpha)
+                            else         -> Color(0xFF3A3A3A)
+                        }
+                    )
+                    .border(1.5.dp, PanelBorder, CircleShape),
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = when {
+                    isConnecting -> "CONNECTING..."
+                    isConnected  -> "CONNECTED"
+                    else         -> "OFFLINE"
+                },
+                color      = if (isConnected) ActiveGreen else MutedBrown,
+                fontSize   = 12.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = 2.sp,
+            )
+
+            Spacer(Modifier.weight(1f))
+
+            // 연결 / 해제 버튼
+            val btnColor = if (isConnected) DangerRed else ActiveGreen
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(btnColor.copy(alpha = 0.15f))
+                    .border(1.5.dp, btnColor.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
                     .clickable(enabled = !isConnecting) { onConnectClick() }
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                    .padding(horizontal = 14.dp, vertical = 7.dp),
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
                 ) {
                     when {
                         isConnecting -> {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(13.dp),
-                                color = NeonGreen,
-                                strokeWidth = 2.dp,
-                            )
-                            Text("연결 중", color = NeonGreen, fontSize = 12.sp,
-                                fontFamily = FontFamily.Monospace)
+                            CircularProgressIndicator(Modifier.size(12.dp), color = ActiveAmber, strokeWidth = 2.dp)
+                            Text("WAIT", color = ActiveAmber, fontSize = 11.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
                         }
                         isConnected -> {
-                            Icon(Icons.Filled.PowerOff, null, tint = DangerRed,
-                                modifier = Modifier.size(13.dp))
-                            Text("해제", color = DangerRed, fontSize = 12.sp,
-                                fontFamily = FontFamily.Monospace)
+                            Icon(Icons.Filled.PowerOff, null, tint = DangerRed, modifier = Modifier.size(13.dp))
+                            Text("DISCONNECT", color = DangerRed, fontSize = 11.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
                         }
                         else -> {
-                            Icon(Icons.Filled.Power, null, tint = NeonGreen,
-                                modifier = Modifier.size(13.dp))
-                            Text("연결", color = NeonGreen, fontSize = 12.sp,
-                                fontFamily = FontFamily.Monospace)
+                            Icon(Icons.Filled.Power, null, tint = ActiveGreen, modifier = Modifier.size(13.dp))
+                            Text("CONNECT", color = ActiveGreen, fontSize = 11.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
             }
         }
+        RivetRow()
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 모드 토글 (웹 버전: 슬라이딩 필 버튼 with Gamepad/Eye 아이콘)
+// 모드 토글
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun ModeToggleSection(isManualMode: Boolean, onToggle: () -> Unit) {
-    val activeColor = if (isManualMode) NeonCyan else NeonGreen
-
+private fun TinModeToggle(isManualMode: Boolean, onToggle: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .background(SteelMid)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(
-            "제어 모드",
-            color      = MutedText,
+            "[ CONTROL MODE ]",
+            color      = MutedBrown,
             fontSize   = 10.sp,
             fontFamily = FontFamily.Monospace,
             letterSpacing = 2.sp,
+            modifier   = Modifier.align(Alignment.CenterHorizontally),
         )
 
-        // 슬라이딩 필 버튼
-        BoxWithConstraints(
+        // 토글 — 두꺼운 사각 버튼 두 개
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp)
-                .clip(CircleShape)
-                .background(Color(0xFF1F2937))
-                .border(1.dp, BorderColor, CircleShape)
-                .clickable { onToggle() },
+                .clip(RoundedCornerShape(6.dp))
+                .border(2.dp, PanelBorder, RoundedCornerShape(6.dp)),
         ) {
-            val halfWidth = maxWidth / 2
-            val indicatorOffset by animateDpAsState(
-                targetValue  = if (isManualMode) 0.dp else halfWidth,
-                animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                label = "pillOffset",
+            TinToggleSegment(
+                label    = "MANUAL",
+                icon     = Icons.Filled.SportsEsports,
+                active   = isManualMode,
+                color    = ActiveAmber,
+                onClick  = { if (!isManualMode) onToggle() },
+                modifier = Modifier.weight(1f),
             )
-
-            // 슬라이딩 인디케이터 배경
-            Box(
-                modifier = Modifier
-                    .absoluteOffset(x = indicatorOffset + 4.dp, y = 4.dp)
-                    .size(halfWidth - 8.dp, 48.dp)
-                    .clip(CircleShape)
-                    .background(activeColor),
+            Box(modifier = Modifier.width(2.dp).height(56.dp).background(PanelBorder))
+            TinToggleSegment(
+                label    = "AUTO",
+                icon     = Icons.Filled.Visibility,
+                active   = !isManualMode,
+                color    = ActiveGreen,
+                onClick  = { if (isManualMode) onToggle() },
+                modifier = Modifier.weight(1f),
             )
-
-            // 레이블 (인디케이터 위에 오버레이)
-            Row(modifier = Modifier.fillMaxSize()) {
-                // 수동 (왼쪽)
-                Box(
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Icon(
-                            Icons.Filled.SportsEsports,
-                            contentDescription = null,
-                            tint     = if (isManualMode) DarkBg else MutedText,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Text(
-                            "수동",
-                            color      = if (isManualMode) DarkBg else MutedText,
-                            fontSize   = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    }
-                }
-                // 자동 (오른쪽)
-                Box(
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Icon(
-                            Icons.Filled.Visibility,
-                            contentDescription = null,
-                            tint     = if (!isManualMode) DarkBg else MutedText,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Text(
-                            "자동",
-                            color      = if (!isManualMode) DarkBg else MutedText,
-                            fontSize   = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    }
-                }
-            }
         }
 
-        // 부제목
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+        Text(
+            text    = if (isManualMode) "수동 조종 모드 — 조이스틱으로 직접 제어" else "자율 추적 모드 — HuskyLens AI 카메라",
+            color   = MutedBrown,
+            fontSize = 10.sp,
+            fontFamily = FontFamily.Monospace,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
+private fun TinToggleSegment(
+    label: String,
+    icon: ImageVector,
+    active: Boolean,
+    color: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .height(56.dp)
+            .background(if (active) color.copy(alpha = 0.18f) else SteelMid)
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text(
-                text       = if (isManualMode) "수동 제어 모드" else "HuskyLens 자율 추적 모드",
-                color      = Color.White,
-                fontWeight = FontWeight.Medium,
-                fontSize   = 13.sp,
+            Icon(
+                icon,
+                contentDescription = null,
+                tint     = if (active) color else MutedBrown,
+                modifier = Modifier.size(18.dp),
             )
             Text(
-                text    = if (isManualMode) "조이스틱으로 로봇을 제어합니다" else "감지된 사람을 자동으로 추적합니다",
-                color   = MutedText,
-                fontSize = 11.sp,
+                label,
+                color      = if (active) color else MutedBrown,
+                fontSize   = 13.sp,
+                fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+                fontFamily = FontFamily.Monospace,
             )
         }
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 트래킹 상태 (웹 버전: 카메라 뷰포트 + 스캔라인 애니메이션)
+// 속도 패널
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun TrackingStatusView(isTracking: Boolean) {
-    val infiniteTransition = rememberInfiniteTransition(label = "scan")
+private fun SpeedPanel(speed: SpeedPreset, onSetSpeed: (SpeedPreset) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(SteelMid)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(
+            "SPD",
+            color      = MutedBrown,
+            fontSize   = 10.sp,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp,
+        )
+        SpeedPreset.entries.forEach { preset ->
+            val active = speed == preset
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(if (active) ActiveRust.copy(alpha = 0.2f) else Color.Transparent)
+                    .border(
+                        width = if (active) 2.dp else 1.dp,
+                        color = if (active) ActiveRust else PanelBorder,
+                        shape = RoundedCornerShape(4.dp),
+                    )
+                    .clickable { onSetSpeed(preset) }
+                    .padding(vertical = 8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    preset.label,
+                    color      = if (active) ActiveRust else MutedBrown,
+                    fontSize   = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        }
+    }
+}
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 트래킹 뷰 (자동 모드)
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun TinTrackingView(isTracking: Boolean) {
+    val infiniteTransition = rememberInfiniteTransition(label = "scan")
     val scanProgress by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue  = 1f,
-        animationSpec = infiniteRepeatable(
-            animation  = tween(2000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "scanLine",
+        animationSpec = infiniteRepeatable(tween(2000, easing = LinearEasing), RepeatMode.Restart),
+        label = "scan",
     )
-    val pulseAlpha by infiniteTransition.animateFloat(
+    val blinkAlpha by infiniteTransition.animateFloat(
         initialValue = 0.4f,
         targetValue  = 1f,
-        animationSpec = infiniteRepeatable(
-            animation  = tween(900),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "pulse",
+        animationSpec = infiniteRepeatable(tween(800), RepeatMode.Reverse),
+        label = "blink",
     )
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 16.dp),
+            .padding(vertical = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(
-            "HuskyLens 추적",
-            color      = MutedText,
+            "[ HUSKYLENS TRACKING ]",
+            color      = MutedBrown,
             fontSize   = 10.sp,
             fontFamily = FontFamily.Monospace,
             letterSpacing = 2.sp,
         )
 
-        // 카메라 뷰포트
+        // 뷰파인더
         Box(
             modifier = Modifier
-                .size(160.dp)
-                .clip(RoundedCornerShape(12.dp))
+                .size(180.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color(0xFF0E0E10))
                 .border(
-                    2.dp,
-                    if (isTracking) NeonGreen.copy(alpha = 0.5f) else Color(0xFF374151),
-                    RoundedCornerShape(12.dp),
-                )
-                .background(Color(0xFF050810)),
+                    3.dp,
+                    if (isTracking) ActiveGreen.copy(alpha = 0.8f) else PanelBorder,
+                    RoundedCornerShape(8.dp),
+                ),
             contentAlignment = Alignment.Center,
         ) {
-            // Grid + scan line + corner brackets (Canvas)
             Canvas(modifier = Modifier.fillMaxSize()) {
-                val w = size.width
-                val h = size.height
-
-                // 3×3 그리드
-                val gridColor = NeonGreen.copy(alpha = 0.1f)
+                val w = size.width; val h = size.height
+                val gridColor = ActiveGreen.copy(alpha = 0.08f)
                 for (i in 1..2) {
                     drawLine(gridColor, Offset(w * i / 3f, 0f), Offset(w * i / 3f, h), 1f)
                     drawLine(gridColor, Offset(0f, h * i / 3f), Offset(w, h * i / 3f), 1f)
                 }
-
                 // 스캔라인
                 val scanY = h * scanProgress
-                drawLine(NeonGreen.copy(alpha = 0.6f), Offset(0f, scanY), Offset(w, scanY), 2f)
-                drawLine(NeonGreen.copy(alpha = 0.15f), Offset(0f, scanY - 6f), Offset(w, scanY - 6f), 8f)
+                drawLine(ActiveGreen.copy(alpha = 0.5f), Offset(0f, scanY), Offset(w, scanY), 1.5f)
 
                 // 코너 브래킷
-                val m = 10f
-                val bl = 18f
-                val bw = 2f
-                val bc = NeonGreen.copy(alpha = 0.7f)
-                drawLine(bc, Offset(m, m), Offset(m + bl, m), bw)
-                drawLine(bc, Offset(m, m), Offset(m, m + bl), bw)
-                drawLine(bc, Offset(w - m, m), Offset(w - m - bl, m), bw)
-                drawLine(bc, Offset(w - m, m), Offset(w - m, m + bl), bw)
-                drawLine(bc, Offset(m, h - m), Offset(m + bl, h - m), bw)
-                drawLine(bc, Offset(m, h - m), Offset(m, h - m - bl), bw)
-                drawLine(bc, Offset(w - m, h - m), Offset(w - m - bl, h - m), bw)
-                drawLine(bc, Offset(w - m, h - m), Offset(w - m, h - m - bl), bw)
+                val m = 12f; val bl = 20f; val bw = 2.5f
+                val bc = (if (isTracking) ActiveGreen else MutedBrown).copy(alpha = 0.9f)
+                drawLine(bc, Offset(m, m), Offset(m + bl, m), bw, cap = StrokeCap.Square)
+                drawLine(bc, Offset(m, m), Offset(m, m + bl), bw, cap = StrokeCap.Square)
+                drawLine(bc, Offset(w - m, m), Offset(w - m - bl, m), bw, cap = StrokeCap.Square)
+                drawLine(bc, Offset(w - m, m), Offset(w - m, m + bl), bw, cap = StrokeCap.Square)
+                drawLine(bc, Offset(m, h - m), Offset(m + bl, h - m), bw, cap = StrokeCap.Square)
+                drawLine(bc, Offset(m, h - m), Offset(m, h - m - bl), bw, cap = StrokeCap.Square)
+                drawLine(bc, Offset(w - m, h - m), Offset(w - m - bl, h - m), bw, cap = StrokeCap.Square)
+                drawLine(bc, Offset(w - m, h - m), Offset(w - m, h - m - bl), bw, cap = StrokeCap.Square)
             }
 
-            // 중앙 아이콘
             Icon(
                 imageVector = if (isTracking) Icons.Filled.GpsFixed else Icons.Filled.RemoveRedEye,
                 contentDescription = null,
-                tint     = if (isTracking) NeonGreen.copy(alpha = pulseAlpha) else MutedText,
-                modifier = Modifier.size(48.dp),
+                tint     = if (isTracking) ActiveGreen.copy(alpha = blinkAlpha) else MutedBrown,
+                modifier = Modifier.size(52.dp),
             )
         }
 
         // 상태 텍스트
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (isTracking) NeonGreen.copy(alpha = pulseAlpha)
-                            else MutedText
-                        ),
-                )
-                Text(
-                    if (isTracking) "추적 중" else "탐색 중...",
-                    color      = if (isTracking) NeonGreen else MutedText,
-                    fontSize   = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                )
-            }
-            if (isTracking) {
-                Text(
-                    "추적 대상: 사람",
-                    color    = MutedText,
-                    fontSize = 11.sp,
-                )
-            }
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (isTracking) ActiveGreen.copy(alpha = blinkAlpha) else MutedBrown
+                    ),
+            )
             Text(
-                "HuskyLens AI 카메라로 감지된 사람을 자동으로 추적합니다",
-                color     = MutedText,
-                fontSize  = 10.sp,
-                textAlign = TextAlign.Center,
-                modifier  = Modifier.padding(horizontal = 24.dp),
+                text       = if (isTracking) "TARGET LOCKED" else "SCANNING...",
+                color      = if (isTracking) ActiveGreen else MutedBrown,
+                fontSize   = 13.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = 1.sp,
             )
         }
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 상체 슬라이더 (기존 유지)
+// 상체 제어
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun BodyControlSection(
+private fun TinBodyControl(
     currentAngle: Int,
     targetAngle: Int,
     limitError: Boolean,
@@ -603,87 +545,114 @@ private fun BodyControlSection(
     onHome: () -> Unit,
 ) {
     var sliderValue by remember(targetAngle) { mutableFloatStateOf(targetAngle.toFloat()) }
+    val lastSendMs = remember { longArrayOf(0L) }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+            .background(SteelMid)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("상체 회전", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Text(
+                "[ TORSO ROTATION ]",
+                color      = MutedBrown,
+                fontSize   = 10.sp,
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = 2.sp,
+            )
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .border(1.dp, NeonCyan.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(SteelLight.copy(alpha = 0.3f))
+                    .border(1.5.dp, PanelBorder, RoundedCornerShape(4.dp))
                     .clickable { onHome() }
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Icon(Icons.Filled.Home, null, tint = NeonCyan, modifier = Modifier.size(13.dp))
-                    Text("원점 복귀", color = NeonCyan, fontSize = 11.sp)
+                    Icon(Icons.Filled.Home, null, tint = CreamText, modifier = Modifier.size(13.dp))
+                    Text("HOME", color = CreamText, fontSize = 11.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
                 }
             }
         }
 
+        // 에러
         AnimatedVisibility(visible = limitError) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(6.dp))
+                    .clip(RoundedCornerShape(4.dp))
                     .background(DangerRed.copy(alpha = 0.15f))
+                    .border(1.dp, DangerRed.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
                     .padding(horizontal = 12.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Icons.Filled.Warning, null, tint = DangerRed, modifier = Modifier.size(16.dp))
+                Icon(Icons.Filled.Warning, null, tint = DangerRed, modifier = Modifier.size(15.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("최대 회전각 초과 — 범위 내에서 조작하세요", color = DangerRed, fontSize = 12.sp)
+                Text("LIMIT EXCEEDED", color = DangerRed, fontSize = 11.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
             }
         }
 
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            AngleBadge(label = "현재", angle = currentAngle, color = NeonGreen)
-            AngleBadge(label = "목표", angle = targetAngle, color = NeonCyan)
+        // 각도 뱃지
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(4.dp))
+                .background(SteelDark)
+                .border(1.dp, PanelBorder, RoundedCornerShape(4.dp))
+                .padding(vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            TinAngleBadge("CURRENT", currentAngle, ActiveGreen)
+            Box(modifier = Modifier.width(1.dp).height(36.dp).background(PanelBorder))
+            TinAngleBadge("TARGET", sliderValue.toInt(), ActiveAmber)
         }
 
+        // 슬라이더
         Column {
             Slider(
                 value         = sliderValue,
-                onValueChange = { sliderValue = it },
+                onValueChange = { newVal ->
+                    sliderValue = newVal
+                    val now = System.currentTimeMillis()
+                    if (now - lastSendMs[0] >= 80) {
+                        lastSendMs[0] = now
+                        onSetTarget(newVal.toInt().coerceIn(-BODY_MAX_DEG, BODY_MAX_DEG))
+                    }
+                },
                 onValueChangeFinished = {
-                    val snapped = ((sliderValue / 15f).toInt() * 15).coerceIn(-BODY_MAX_DEG, BODY_MAX_DEG)
-                    sliderValue = snapped.toFloat()
-                    onSetTarget(snapped)
+                    onSetTarget(sliderValue.toInt().coerceIn(-BODY_MAX_DEG, BODY_MAX_DEG))
                 },
                 valueRange = (-BODY_MAX_DEG).toFloat()..BODY_MAX_DEG.toFloat(),
                 colors = SliderDefaults.colors(
-                    thumbColor         = NeonCyan,
-                    activeTrackColor   = NeonCyan,
-                    inactiveTrackColor = Color(0xFF374151),
+                    thumbColor         = ActiveRust,
+                    activeTrackColor   = ActiveRust,
+                    inactiveTrackColor = SteelLight,
                 ),
                 modifier = Modifier.fillMaxWidth(),
             )
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("-${BODY_MAX_DEG}°", color = MutedText, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
-                Text("0°",               color = MutedText, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
-                Text("+${BODY_MAX_DEG}°", color = MutedText, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                Text("-${BODY_MAX_DEG}°", color = MutedBrown, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                Text("0°",               color = MutedBrown, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                Text("+${BODY_MAX_DEG}°", color = MutedBrown, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
             }
         }
 
-        val delta = kotlin.math.abs(targetAngle - currentAngle)
-        if (delta >= 15) {
-            val direction = if (targetAngle > currentAngle) "시계방향 ▶" else "◀ 반시계방향"
+        val delta = kotlin.math.abs(sliderValue.toInt() - currentAngle)
+        if (delta >= 3) {
+            val dir = if (sliderValue.toInt() > currentAngle) "CW ▶" else "◀ CCW"
             Text(
-                text  = "이동 중... $direction  (${delta}° 남음)",
-                color = Color(0xFFF59E0B),
-                fontSize = 11.sp,
+                "ROTATING $dir  ${delta}° remaining",
+                color      = ActiveAmber,
+                fontSize   = 10.sp,
                 fontFamily = FontFamily.Monospace,
             )
         }
@@ -691,13 +660,14 @@ private fun BodyControlSection(
 }
 
 @Composable
-private fun AngleBadge(label: String, angle: Int, color: Color) {
+private fun TinAngleBadge(label: String, angle: Int, color: Color) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text = label, color = MutedText, fontSize = 10.sp)
+        Text(label, color = MutedBrown, fontSize = 9.sp, fontFamily = FontFamily.Monospace, letterSpacing = 1.sp)
+        Spacer(Modifier.height(2.dp))
         Text(
-            text       = "${angle}°",
+            "${angle}°",
             color      = color,
-            fontSize   = 22.sp,
+            fontSize   = 26.sp,
             fontWeight = FontWeight.Bold,
             fontFamily = FontFamily.Monospace,
         )
@@ -705,61 +675,66 @@ private fun AngleBadge(label: String, angle: Int, color: Color) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 사운드 버튼 (웹 버전: 컬러 네온 버튼 with Hand/Music/Bell 아이콘)
+// 사운드 패널
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun SoundButtonsSection(
+private fun TinSoundPanel(
     onSayHello: () -> Unit,
     onPlayMusic: () -> Unit,
-    onHorn: () -> Unit,
+    onDance: () -> Unit,
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(CardBg.copy(alpha = 0.5f))
-            .padding(horizontal = 16.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .background(PanelInner),
     ) {
-        Text(
-            "사운드",
-            color      = MutedText,
-            fontSize   = 10.sp,
-            fontFamily = FontFamily.Monospace,
-            letterSpacing = 2.sp,
-            modifier   = Modifier.align(Alignment.CenterHorizontally),
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        RivetRow()
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            NeonSoundButton(
-                icon    = Icons.Filled.PanTool,
-                label   = "인사하기",
-                color   = NeonCyan,
-                onClick = onSayHello,
-                modifier = Modifier.weight(1f),
+            Text(
+                "[ SOUND PANEL ]",
+                color      = MutedBrown,
+                fontSize   = 10.sp,
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = 2.sp,
+                modifier   = Modifier.align(Alignment.CenterHorizontally),
             )
-            NeonSoundButton(
-                icon    = Icons.Filled.MusicNote,
-                label   = "음악 재생",
-                color   = NeonGreen,
-                onClick = onPlayMusic,
-                modifier = Modifier.weight(1f),
-            )
-            NeonSoundButton(
-                icon    = Icons.Filled.Campaign,
-                label   = "경적",
-                color   = NeonOrange,
-                onClick = onHorn,
-                modifier = Modifier.weight(1f),
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                TinSoundButton(
+                    icon    = Icons.Filled.PanTool,
+                    label   = "HELLO",
+                    color   = AmberYellow,
+                    onClick = onSayHello,
+                    modifier = Modifier.weight(1f),
+                )
+                TinSoundButton(
+                    icon    = Icons.Filled.MusicNote,
+                    label   = "MUSIC",
+                    color   = MilitaryGreen,
+                    onClick = onPlayMusic,
+                    modifier = Modifier.weight(1f),
+                )
+                TinSoundButton(
+                    icon    = Icons.Filled.DirectionsRun,
+                    label   = "DANCE",
+                    color   = RustOrange,
+                    onClick = onDance,
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
+        RivetRow()
     }
 }
 
 @Composable
-private fun NeonSoundButton(
+private fun TinSoundButton(
     icon: ImageVector,
     label: String,
     color: Color,
@@ -771,39 +746,29 @@ private fun NeonSoundButton(
 
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(color.copy(alpha = if (isPressed) 0.2f else 0.1f))
-            .border(2.dp, color.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-            .clickable(
-                interactionSource = interactionSource,
-                indication        = null,
-            ) { onClick() }
-            .padding(vertical = 12.dp),
+            .clip(RoundedCornerShape(6.dp))
+            .background(if (isPressed) color.copy(alpha = 0.25f) else color.copy(alpha = 0.1f))
+            .border(
+                width = if (isPressed) 2.5.dp else 1.5.dp,
+                color = color.copy(alpha = if (isPressed) 0.9f else 0.5f),
+                shape = RoundedCornerShape(6.dp),
+            )
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
+            .padding(vertical = 14.dp),
         contentAlignment = Alignment.Center,
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(color.copy(alpha = 0.1f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    icon,
-                    contentDescription = label,
-                    tint     = color,
-                    modifier = Modifier.size(24.dp),
-                )
-            }
+            Icon(icon, contentDescription = label, tint = color, modifier = Modifier.size(26.dp))
             Text(
                 label,
                 color      = color,
-                fontSize   = 11.sp,
-                fontWeight = FontWeight.Medium,
+                fontSize   = 10.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = 1.sp,
             )
         }
     }
@@ -815,68 +780,79 @@ private fun NeonSoundButton(
 
 @SuppressLint("MissingPermission")
 @Composable
-private fun DevicePickerDialog(
+private fun TinDevicePicker(
     devices: List<BluetoothDevice>,
     onSelect: (BluetoothDevice) -> Unit,
     onDismiss: () -> Unit,
 ) {
     Dialog(onDismissRequest = onDismiss) {
-        Surface(shape = RoundedCornerShape(16.dp), color = CardBg) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.padding(bottom = 12.dp),
+        Surface(shape = RoundedCornerShape(8.dp), color = SteelMid) {
+            Column(modifier = Modifier.padding(0.dp)) {
+                // 헤더
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(PanelInner)
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
                 ) {
-                    Icon(Icons.Filled.Bluetooth, null, tint = NeonCyan, modifier = Modifier.size(20.dp))
-                    Text("페어링된 장치", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(Icons.Filled.Bluetooth, null, tint = ActiveAmber, modifier = Modifier.size(18.dp))
+                        Text(
+                            "SELECT DEVICE",
+                            color      = CreamText,
+                            fontWeight = FontWeight.Bold,
+                            fontSize   = 13.sp,
+                            fontFamily = FontFamily.Monospace,
+                            letterSpacing = 1.sp,
+                        )
+                    }
                 }
-                if (devices.isEmpty()) {
-                    Text(
-                        text  = "페어링된 장치가 없습니다.\n설정 > 블루투스에서 HC-06을 먼저 페어링하세요.",
-                        color = MutedText,
-                        fontSize = 14.sp,
-                    )
-                } else {
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        items(devices) { device ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable { onSelect(device) }
-                                    .background(Color(0xFF1F2937))
-                                    .padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Icon(
-                                    Icons.Filled.BluetoothConnected,
-                                    null,
-                                    tint     = NeonCyan,
-                                    modifier = Modifier.size(20.dp),
-                                )
-                                Spacer(Modifier.width(10.dp))
-                                Column {
-                                    Text(
-                                        text       = device.name ?: "알 수 없음",
-                                        color      = Color.White,
-                                        fontWeight = FontWeight.Medium,
-                                        fontSize   = 14.sp,
-                                    )
-                                    Text(
-                                        text     = device.address,
-                                        color    = MutedText,
-                                        fontSize = 11.sp,
-                                        fontFamily = FontFamily.Monospace,
-                                    )
+                HorizontalDivider(color = PanelBorder, thickness = 2.dp)
+
+                Column(modifier = Modifier.padding(12.dp)) {
+                    if (devices.isEmpty()) {
+                        Text(
+                            "페어링된 장치 없음\n설정 > 블루투스에서 HC-06을 먼저 페어링하세요.",
+                            color    = MutedBrown,
+                            fontSize = 13.sp,
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier.padding(8.dp),
+                        )
+                    } else {
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.heightIn(max = 300.dp),
+                        ) {
+                            items(devices) { device ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(SteelDark)
+                                        .border(1.dp, PanelBorder, RoundedCornerShape(4.dp))
+                                        .clickable { onSelect(device) }
+                                        .padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(Icons.Filled.BluetoothConnected, null, tint = ActiveAmber, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(10.dp))
+                                    Column {
+                                        Text(device.name ?: "Unknown", color = CreamText, fontWeight = FontWeight.Bold, fontSize = 13.sp, fontFamily = FontFamily.Monospace)
+                                        Text(device.address, color = MutedBrown, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                                    }
                                 }
                             }
                         }
                     }
-                }
-                Spacer(Modifier.height(8.dp))
-                TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) {
-                    Text("취소", color = MutedText)
+                    Spacer(Modifier.height(4.dp))
+                    Box(modifier = Modifier.align(Alignment.End)) {
+                        TextButton(onClick = onDismiss) {
+                            Text("CANCEL", color = MutedBrown, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        }
+                    }
                 }
             }
         }

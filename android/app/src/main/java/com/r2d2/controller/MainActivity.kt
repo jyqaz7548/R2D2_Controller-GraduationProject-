@@ -57,7 +57,7 @@ class MainActivity : ComponentActivity() {
                     onBodyHome           = vm::bodyHome,
                     onSayHello           = vm::sayHello,
                     onPlayMusic          = vm::playMusic,
-                    onHorn               = vm::horn,
+                    onDance              = vm::dance,
                 )
             }
         }

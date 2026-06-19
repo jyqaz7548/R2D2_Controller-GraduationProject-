@@ -106,7 +106,15 @@ class ControllerViewModel(app: Application) : AndroidViewModel(app) {
 
     // ─── 연결 ────────────────────────────────────────────────────────
     fun connect(device: BluetoothDevice) = bluetoothService.connect(device)
-    fun disconnect() = bluetoothService.disconnect()
+
+    /** 연결 해제 — 종료음(Z)을 먼저 전송 후 1.5초 뒤 BT 해제 */
+    fun disconnect() {
+        viewModelScope.launch {
+            send(RobotCommands.shutdown())   // 0012.mp3 트리거
+            delay(1500)                       // 아두이노가 파일 재생 시작할 시간
+            bluetoothService.disconnect()
+        }
+    }
 
     // ─── 조이스틱 ────────────────────────────────────────────────────
     fun sendJoystick(x: Float, y: Float) {
@@ -140,7 +148,7 @@ class ControllerViewModel(app: Application) : AndroidViewModel(app) {
     // ─── 사운드 ──────────────────────────────────────────────────────
     fun sayHello()  = send(RobotCommands.sayHello())
     fun playMusic() = send(RobotCommands.playMusic())
-    fun horn()      = send(RobotCommands.horn())
+    fun dance()     = send(RobotCommands.dance())
 
     // ─── 상체 제어 ───────────────────────────────────────────────────
 
@@ -150,10 +158,9 @@ class ControllerViewModel(app: Application) : AndroidViewModel(app) {
      * Arduino가 내부적으로 회전 처리 후 BODY:{angle} 응답
      */
     fun setTargetBodyAngle(angleDeg: Int) {
-        val snapped = ((angleDeg / BODY_STEP_DEG) * BODY_STEP_DEG)
-            .coerceIn(-BODY_MAX_DEG, BODY_MAX_DEG)
-        _targetBodyAngle.value = snapped
-        send(RobotCommands.bodyGoto(snapped))
+        val clamped = angleDeg.coerceIn(-BODY_MAX_DEG, BODY_MAX_DEG)
+        _targetBodyAngle.value = clamped
+        send(RobotCommands.bodyGoto(clamped))
     }
 
     /** 상체 원점 복귀 (H 명령) */
