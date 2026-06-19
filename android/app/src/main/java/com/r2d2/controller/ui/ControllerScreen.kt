@@ -58,7 +58,6 @@ fun ControllerScreen(
     pairedDevices: List<BluetoothDevice>,
     bodyAngle: Int,
     targetBodyAngle: Int,
-    bodyLimitError: Boolean,
     onConnect: (BluetoothDevice) -> Unit,
     onDisconnect: () -> Unit,
     onJoystickMove: (Float, Float) -> Unit,
@@ -67,6 +66,7 @@ fun ControllerScreen(
     onSetSpeed: (SpeedPreset) -> Unit,
     onSetTargetBodyAngle: (Int) -> Unit,
     onBodyHome: () -> Unit,
+    onEmergencyStop: () -> Unit,
     onSayHello: () -> Unit,
     onPlayMusic: () -> Unit,
     onDance: () -> Unit,
@@ -74,6 +74,7 @@ fun ControllerScreen(
     var showDevicePicker by remember { mutableStateOf(false) }
     val isConnected = btState is BtState.Connected
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -128,7 +129,6 @@ fun ControllerScreen(
             TinBodyControl(
                 currentAngle = bodyAngle,
                 targetAngle  = targetBodyAngle,
-                limitError   = bodyLimitError,
                 onSetTarget  = onSetTargetBodyAngle,
                 onHome       = onBodyHome,
             )
@@ -142,8 +142,18 @@ fun ControllerScreen(
             onDance     = onDance,
         )
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(80.dp))   // E-STOP 버튼 뒤 여백
     }
+
+    // ── 비상정지 버튼 (항상 최상단에 플로팅) ─────────────────────────
+    EmergencyStopButton(
+        onClick  = onEmergencyStop,
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .navigationBarsPadding()
+            .padding(bottom = 16.dp),
+    )
+    } // Box 닫기
 
     if (showDevicePicker) {
         TinDevicePicker(
@@ -540,7 +550,6 @@ private fun TinTrackingView(isTracking: Boolean) {
 private fun TinBodyControl(
     currentAngle: Int,
     targetAngle: Int,
-    limitError: Boolean,
     onSetTarget: (Int) -> Unit,
     onHome: () -> Unit,
 ) {
@@ -581,23 +590,6 @@ private fun TinBodyControl(
                     Icon(Icons.Filled.Home, null, tint = CreamText, modifier = Modifier.size(13.dp))
                     Text("HOME", color = CreamText, fontSize = 11.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
                 }
-            }
-        }
-
-        // 에러
-        AnimatedVisibility(visible = limitError) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(DangerRed.copy(alpha = 0.15f))
-                    .border(1.dp, DangerRed.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(Icons.Filled.Warning, null, tint = DangerRed, modifier = Modifier.size(15.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("LIMIT EXCEEDED", color = DangerRed, fontSize = 11.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
             }
         }
 
@@ -770,6 +762,67 @@ private fun TinSoundButton(
                 fontFamily = FontFamily.Monospace,
                 letterSpacing = 1.sp,
             )
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 비상정지 버튼
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun EmergencyStopButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    val infiniteTransition = rememberInfiniteTransition(label = "estop_pulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue  = 1f,
+        targetValue   = 1.08f,
+        animationSpec = infiniteRepeatable(tween(700, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label         = "estop_scale",
+    )
+
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center,
+    ) {
+        // 외부 글로우 링
+        Box(
+            modifier = Modifier
+                .size((96 * if (isPressed) 1f else pulseScale).dp)
+                .clip(CircleShape)
+                .background(DangerRed.copy(alpha = if (isPressed) 0.4f else 0.2f)),
+        )
+        // 메인 버튼
+        Box(
+            modifier = Modifier
+                .size(80.dp)
+                .clip(CircleShape)
+                .background(if (isPressed) DangerRed else DangerRed.copy(alpha = 0.85f))
+                .border(3.dp, Color.White.copy(alpha = 0.8f), CircleShape)
+                .clickable(interactionSource = interactionSource, indication = null) { onClick() },
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Icon(
+                    Icons.Filled.Warning,
+                    contentDescription = "비상정지",
+                    tint     = Color.White,
+                    modifier = Modifier.size(24.dp),
+                )
+                Text(
+                    "E-STOP",
+                    color      = Color.White,
+                    fontSize   = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 1.sp,
+                )
+            }
         }
     }
 }

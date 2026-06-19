@@ -36,7 +36,6 @@ class MainActivity : ComponentActivity() {
                 val speed            by vm.speed.collectAsState()
                 val bodyAngle        by vm.bodyAngle.collectAsState()
                 val targetBodyAngle  by vm.targetBodyAngle.collectAsState()
-                val bodyLimitError   by vm.bodyLimitError.collectAsState()
 
                 ControllerScreen(
                     btState              = btState,
@@ -46,7 +45,6 @@ class MainActivity : ComponentActivity() {
                     pairedDevices        = vm.pairedDevices,
                     bodyAngle            = bodyAngle,
                     targetBodyAngle      = targetBodyAngle,
-                    bodyLimitError       = bodyLimitError,
                     onConnect            = vm::connect,
                     onDisconnect         = vm::disconnect,
                     onJoystickMove       = vm::sendJoystick,
@@ -55,6 +53,7 @@ class MainActivity : ComponentActivity() {
                     onSetSpeed           = vm::setSpeed,
                     onSetTargetBodyAngle = vm::setTargetBodyAngle,
                     onBodyHome           = vm::bodyHome,
+                    onEmergencyStop      = vm::emergencyStop,
                     onSayHello           = vm::sayHello,
                     onPlayMusic          = vm::playMusic,
                     onDance              = vm::dance,

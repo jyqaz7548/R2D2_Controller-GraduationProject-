@@ -8,8 +8,6 @@ import androidx.lifecycle.viewModelScope
 import com.r2d2.controller.RobotCommands
 import com.r2d2.controller.bluetooth.BluetoothService
 import com.r2d2.controller.bluetooth.BtState
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay   // limitErrorJob 타임아웃에 사용
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -48,13 +46,8 @@ class ControllerViewModel(app: Application) : AndroidViewModel(app) {
     private val _targetBodyAngle = MutableStateFlow(0)
     val targetBodyAngle = _targetBodyAngle.asStateFlow()
 
-    /** E:BODY_LIMIT 수신 시 true */
-    private val _bodyLimitError = MutableStateFlow(false)
-    val bodyLimitError = _bodyLimitError.asStateFlow()
-
     // ── 기타 ───────────────────────────────────────────────────────────
     private var lastCmd = ""
-    private var limitErrorJob: Job? = null
 
     // ─────────────────────────────────────────────────────────────────
     init {
@@ -72,16 +65,8 @@ class ControllerViewModel(app: Application) : AndroidViewModel(app) {
                         _bodyAngle.value = angle
                     }
 
-                    line == "E:BODY_LIMIT" -> {
-                        _bodyLimitError.value = true
-                        // 현재 각도를 목표로 리셋
-                        _targetBodyAngle.value = _bodyAngle.value
-                        // 3초 후 에러 표시 해제
-                        limitErrorJob?.cancel()
-                        limitErrorJob = viewModelScope.launch {
-                            delay(3000)
-                            _bodyLimitError.value = false
-                        }
+                    line == "ESTOP:OK" -> {
+                        // 비상정지 확인 — ViewModel 상태는 emergencyStop()에서 이미 처리됨
                     }
                 }
             }
@@ -144,6 +129,14 @@ class ControllerViewModel(app: Application) : AndroidViewModel(app) {
 
     // ─── 속도 ────────────────────────────────────────────────────────
     fun setSpeed(preset: SpeedPreset) { _speed.value = preset }
+
+    // ─── 비상정지 ────────────────────────────────────────────────────
+    fun emergencyStop() {
+        send(RobotCommands.emergencyStop())
+        _isManualMode.value = true
+        _isTracking.value   = false
+        lastCmd = ""
+    }
 
     // ─── 사운드 ──────────────────────────────────────────────────────
     fun sayHello()  = send(RobotCommands.sayHello())
