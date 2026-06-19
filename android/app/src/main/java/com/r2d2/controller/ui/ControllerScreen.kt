@@ -230,8 +230,6 @@ private fun StatusBar(
         modifier = Modifier
             .fillMaxWidth()
             .background(CardBg)
-            .border(width = 1.dp, color = BorderColor,
-                shape = androidx.compose.foundation.shape.RectangleShape)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
