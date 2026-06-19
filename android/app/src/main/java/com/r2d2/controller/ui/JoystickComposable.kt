@@ -29,7 +29,7 @@ fun VirtualJoystick(
     var isDragging  by remember { mutableStateOf(false) }
     var centerPx   by remember { mutableStateOf(Offset.Zero) }
 
-    val maxRadius = 120f   // 픽셀 단위 최대 반경
+    val maxRadius = 160f   // 픽셀 단위 최대 반경
 
     Column(
         modifier = modifier,
@@ -45,7 +45,7 @@ fun VirtualJoystick(
 
         Canvas(
             modifier = Modifier
-                .size(240.dp)
+                .size(320.dp)
                 .pointerInput(Unit) {
                     detectDragGestures(
                         onDragStart = { startOffset ->
@@ -115,7 +115,7 @@ fun VirtualJoystick(
 
             // ── 노브 ───────────────────────────────────────
             val knobCenter = Offset(cx + knobOffset.x, cy + knobOffset.y)
-            val knobRadius = 40f
+            val knobRadius = 52f
             val glowAlpha  = if (isDragging) 0.35f else 0.15f
 
             drawCircle(
