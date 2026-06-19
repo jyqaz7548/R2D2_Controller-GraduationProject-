@@ -6,8 +6,9 @@ import { ModeToggle } from "./mode-toggle";
 import { VirtualJoystick } from "./virtual-joystick";
 import { TrackingStatus } from "./tracking-status";
 import { SoundEffects } from "./sound-effects";
+import { BodyControl } from "./body-control";
 import { Bot } from "lucide-react";
-import { RobotSerial, Commands } from "@/lib/serial";
+import { RobotSerial, Commands, BODY_STEP_DEG } from "@/lib/serial";
 
 type SpeedPreset = "LOW" | "MED" | "HIGH";
 const SPEED_MAP: Record<SpeedPreset, number> = { LOW: 0.4, MED: 0.7, HIGH: 1.0 };
@@ -17,63 +18,81 @@ export function RobotController() {
   const [isConnecting, setIsConnecting]   = useState(false);
   const [isManualMode, setIsManualMode]   = useState(true);
   const [isTracking, setIsTracking]       = useState(false);
-  const [isObstacle, setIsObstacle]       = useState(false);
   const [speedPreset, setSpeedPreset]     = useState<SpeedPreset>("MED");
   const [isSerialSupported, setIsSerialSupported] = useState(false);
 
-  const serialRef      = useRef<RobotSerial | null>(null);
-  const lastCmdRef     = useRef<string>("");
-  const obstacleTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ── 상체 상태 ────────────────────────────────────────────────────
+  const [bodyAngle, setBodyAngle]         = useState(0);   // Arduino 확인 각도
+  const [targetBodyAngle, setTargetBodyAngle] = useState(0); // 슬라이더 목표
+  const [bodyLimitError, setBodyLimitError]   = useState(false);
+  const bodyMovingRef  = useRef(false);  // Arduino 이동 중 여부
+  const limitErrorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 초기화
+  const serialRef  = useRef<RobotSerial | null>(null);
+  const lastCmdRef = useRef<string>("");
+
+  // ─── 초기화 ─────────────────────────────────────────────────────
   useEffect(() => {
     setIsSerialSupported(RobotSerial.isSupported());
 
     const serial = new RobotSerial();
     serialRef.current = serial;
 
-    // Arduino → App 수신 파싱
     serial.onData((data) => {
-      if (data === "TRACKING:1") setIsTracking(true);
-      if (data === "TRACKING:0") setIsTracking(false);
-      if (data === "OBSTACLE") {
-        setIsObstacle(true);
-        if (obstacleTimer.current) clearTimeout(obstacleTimer.current);
-        obstacleTimer.current = setTimeout(() => setIsObstacle(false), 2000);
+      if (data === "TRACKING:1") { setIsTracking(true);  return; }
+      if (data === "TRACKING:0") { setIsTracking(false); return; }
+
+      if (data.startsWith("BODY:")) {
+        const angle = parseInt(data.slice(5), 10);
+        if (!isNaN(angle)) {
+          setBodyAngle(angle);
+          bodyMovingRef.current = false;
+          // 목표 각도에 아직 못 도달했으면 다음 스텝 전송
+          sendNextBodyStep(angle);
+        }
+        return;
+      }
+
+      if (data === "E:BODY_LIMIT") {
+        setBodyLimitError(true);
+        // 현재 각도로 목표 리셋 (더 이상 명령 안 보냄)
+        setTargetBodyAngle((prev) => { bodyMovingRef.current = false; return prev; });
+        if (limitErrorTimer.current) clearTimeout(limitErrorTimer.current);
+        limitErrorTimer.current = setTimeout(() => setBodyLimitError(false), 3000);
+        return;
       }
     });
 
     serial.onDisconnect(() => {
       setIsConnected(false);
       setIsTracking(false);
-      setIsObstacle(false);
+      setBodyAngle(0);
+      setTargetBodyAngle(0);
+      bodyMovingRef.current = false;
     });
 
     return () => { serial.disconnect(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ─── 연결 / 해제 ─────────────────────────
+  // ─── 연결 / 해제 ────────────────────────────────────────────────
   const handleConnect = async () => {
     if (!serialRef.current) return;
-
     if (isConnected) {
       await serialRef.current.disconnect();
       setIsConnected(false);
       return;
     }
-
     setIsConnecting(true);
     const ok = await serialRef.current.connect();
     setIsConnecting(false);
-
     if (ok) {
       setIsConnected(true);
-      // 연결 직후 현재 모드 동기화
       await serialRef.current.send(Commands.manualMode());
     }
   };
 
-  // ─── 명령 전송 (중복 방지) ───────────────
+  // ─── 명령 전송 (중복 방지) ───────────────────────────────────────
   const sendCmd = useCallback(async (cmd: string) => {
     if (!serialRef.current?.isConnected) return;
     if (cmd === lastCmdRef.current) return;
@@ -81,11 +100,10 @@ export function RobotController() {
     await serialRef.current.send(cmd);
   }, []);
 
-  // ─── 조이스틱 ────────────────────────────
+  // ─── 조이스틱 ───────────────────────────────────────────────────
   const handleJoystickMove = useCallback(
     ({ x, y }: { x: number; y: number }) => {
-      const cmd = Commands.fromJoystick(x, y, SPEED_MAP[speedPreset]);
-      sendCmd(cmd);
+      sendCmd(Commands.fromJoystick(x, y, SPEED_MAP[speedPreset]));
     },
     [sendCmd, speedPreset]
   );
@@ -95,7 +113,7 @@ export function RobotController() {
     await serialRef.current?.send(Commands.stop());
   }, []);
 
-  // ─── 모드 전환 ───────────────────────────
+  // ─── 모드 전환 ───────────────────────────────────────────────────
   const handleModeToggle = async () => {
     const next = !isManualMode;
     setIsManualMode(next);
@@ -107,10 +125,46 @@ export function RobotController() {
     }
   };
 
-  // ─── 사운드 ──────────────────────────────
+  // ─── 사운드 ─────────────────────────────────────────────────────
   const handleSayHello  = async () => { await serialRef.current?.send(Commands.sayHello()); };
   const handlePlayMusic = async () => { await serialRef.current?.send(Commands.playMusic()); };
   const handleHorn      = async () => { await serialRef.current?.send(Commands.horn()); };
+
+  // ─── 상체 제어 ──────────────────────────────────────────────────
+  /**
+   * 현재 각도 → 목표 각도로 한 스텝씩 이동
+   * Arduino가 BODY:{angle} 응답할 때마다 호출됨
+   */
+  const sendNextBodyStep = useCallback(
+    (current: number) => {
+      // targetBodyAngle은 클로저로 캡처되지 않으므로 ref로 관리
+      const target = targetBodyAngleRef.current;
+      const delta  = target - current;
+      if (Math.abs(delta) < BODY_STEP_DEG / 2) return;  // 도달
+      if (bodyMovingRef.current) return;
+      bodyMovingRef.current = true;
+      const cmd = delta > 0 ? Commands.bodyRight() : Commands.bodyLeft();
+      serialRef.current?.send(cmd);
+    },
+    []
+  );
+
+  // targetBodyAngle을 ref로도 추적 (sendNextBodyStep 클로저 문제 해결)
+  const targetBodyAngleRef = useRef(0);
+
+  const handleSetTargetBodyAngle = useCallback((angle: number) => {
+    setTargetBodyAngle(angle);
+    targetBodyAngleRef.current = angle;
+    // 현재 각도 기준으로 즉시 첫 스텝 전송
+    sendNextBodyStep(bodyAngle);
+  }, [bodyAngle, sendNextBodyStep]);
+
+  const handleBodyHome = useCallback(async () => {
+    setTargetBodyAngle(0);
+    targetBodyAngleRef.current = 0;
+    bodyMovingRef.current = true;
+    await serialRef.current?.send(Commands.bodyHome());
+  }, []);
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -119,7 +173,7 @@ export function RobotController() {
         isConnected={isConnected}
         isConnecting={isConnecting}
         isSerialSupported={isSerialSupported}
-        isObstacle={isObstacle}
+        isObstacle={false}
         onConnect={handleConnect}
       />
 
@@ -139,7 +193,7 @@ export function RobotController() {
       {/* 모드 토글 */}
       <ModeToggle isManualMode={isManualMode} onToggle={handleModeToggle} />
 
-      {/* 속도 프리셋 (수동 모드일 때만) */}
+      {/* 속도 프리셋 (수동 모드) */}
       {isManualMode && (
         <div className="flex justify-center gap-2 px-6 pb-2">
           {(["LOW", "MED", "HIGH"] as SpeedPreset[]).map((p) => (
@@ -161,7 +215,7 @@ export function RobotController() {
 
       <div className="h-px bg-border mx-6" />
 
-      {/* 컨트롤 영역 */}
+      {/* 조이스틱 / 트래킹 */}
       <div className="flex-1 flex items-center justify-center py-6">
         {isManualMode ? (
           <VirtualJoystick
@@ -172,6 +226,15 @@ export function RobotController() {
           <TrackingStatus isTracking={isTracking} targetName="사람" />
         )}
       </div>
+
+      {/* 상체 슬라이더 */}
+      <BodyControl
+        currentAngle={bodyAngle}
+        targetAngle={targetBodyAngle}
+        limitError={bodyLimitError}
+        onSetTarget={handleSetTargetBodyAngle}
+        onHome={handleBodyHome}
+      />
 
       {/* 사운드 */}
       <SoundEffects

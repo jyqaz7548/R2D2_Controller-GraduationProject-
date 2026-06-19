@@ -1,11 +1,16 @@
 /**
- * ArduD2 Robot - Web Serial API 통신 레이어  (v2)
+ * ArduD2 Robot - Web Serial API 통신 레이어  (v3)
  *
  * HC-06 블루투스 모듈은 페어링하면 PC에서 가상 COM 포트로 잡힌다.
  * Web Serial API를 통해 Chrome/Edge 브라우저에서 직접 접근 가능.
  *
  * 지원 환경: Chrome 89+, Edge 89+ (HTTPS 또는 localhost 필수)
- * 모바일: Android Chrome 지원 (iOS 미지원)
+ * 모바일: Android Chrome 미지원 (Web Serial API 미구현) → Android 앱 사용
+ *
+ * [v3 변경사항 - R2D2_main_v5 프로토콜 동기화]
+ * - 상체 제어 명령 추가: T (시계방향 15°), U (반시계방향 15°), H (원점 복귀), C (타겟 초기화)
+ * - 수신: BODY:{angle} (상체 회전 완료 + 현재 각도), E:BODY_LIMIT (각도 제한 초과)
+ * - OBSTACLE 수신 제거 (v5에서 초음파 센서 제거됨)
  *
  * [v2 버그 수정]
  * - 재연결 불가 버그: disconnect() 시 reader를 cancel()한 뒤 port.close()
@@ -33,13 +38,22 @@
 //   2       Play Music
 //   3       Horn
 //
+// 상체 제어:
+//   T       시계방향 15도 회전
+//   U       반시계방향 15도 회전
+//   H       원점 복귀
+//   C       타겟 초기화
+//
 // Arduino → App:
-//   "TRACKING:1\n"   타겟 감지
-//   "TRACKING:0\n"   타겟 없음
-//   "OBSTACLE\n"     장애물 감지
+//   "TRACKING:1\n"     타겟 감지
+//   "TRACKING:0\n"     타겟 없음
+//   "BODY:{angle}\n"   상체 회전 완료 + 현재 각도 (예: "BODY:45")
+//   "E:BODY_LIMIT\n"   상체 최대 회전각 초과 에러
 // ─────────────────────────────────────────────
 
 export const BAUD_RATE = 9600;
+export const BODY_STEP_DEG = 15;
+export const BODY_MAX_DEG  = 350;
 
 export const Commands = {
   forward:  (speed = 7) => `F${Math.min(9, Math.max(0, Math.round(speed)))}`,
@@ -52,6 +66,12 @@ export const Commands = {
   sayHello:   () => "1",
   playMusic:  () => "2",
   horn:       () => "3",
+
+  // 상체 제어
+  bodyRight:   () => "T",   // 시계방향 15도
+  bodyLeft:    () => "U",   // 반시계방향 15도
+  bodyHome:    () => "H",   // 원점 복귀
+  clearTarget: () => "C",   // 타겟 초기화
 
   /**
    * 조이스틱 XY → 이동 명령
@@ -72,7 +92,6 @@ export const Commands = {
 export class RobotSerial {
   private port: SerialPort | null = null;
   private writer: WritableStreamDefaultWriter<Uint8Array> | null = null;
-  // reader를 클래스 필드로 유지 → disconnect()에서 cancel() 가능
   private reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   private readLoopActive = false;
   private receiveBuffer = "";
@@ -83,7 +102,6 @@ export class RobotSerial {
   async connect(): Promise<boolean> {
     if (!RobotSerial.isSupported()) return false;
 
-    // 이전 연결 잔여 상태 초기화
     this.receiveBuffer = "";
     this.readLoopActive = false;
 
@@ -91,9 +109,8 @@ export class RobotSerial {
       this.port = await (navigator as any).serial.requestPort();
       await this.port!.open({ baudRate: BAUD_RATE });
       this.writer = this.port!.writable!.getWriter();
-      this.startReadLoop(); // 비동기 루프 시작 (await 안함)
+      this.startReadLoop();
 
-      // 장치가 물리적으로 제거됐을 때 (예: USB 뽑힘)
       this.port!.addEventListener("disconnect", () => this._onPortHardDisconnect());
 
       return true;
@@ -104,21 +121,17 @@ export class RobotSerial {
     }
   }
 
-  // ─── 해제 (사용자 버튼) ─────────────────────
-  // readable 락 문제 해결: reader.cancel() → writer.releaseLock() → port.close() 순서
+  // ─── 해제 ───────────────────────────────────
   async disconnect(): Promise<void> {
     this.readLoopActive = false;
 
-    // 1) reader cancel → readable 스트림 락 해제
     const reader = this.reader;
     this.reader = null;
     try { await reader?.cancel(); } catch {}
 
-    // 2) writer 락 해제
     try { this.writer?.releaseLock(); } catch {}
     this.writer = null;
 
-    // 3) 이제 포트를 안전하게 닫을 수 있음
     const port = this.port;
     this.port = null;
     try { await port?.close(); } catch {}
@@ -157,27 +170,22 @@ export class RobotSerial {
         }
       }
     } catch {
-      // reader.cancel()이 호출되면 여기서 AbortError가 발생 - 정상
+      // reader.cancel() → AbortError 정상
     } finally {
       try { reader.releaseLock(); } catch {}
-      // 현재 reader가 이 루프의 reader와 같을 때만 null로 세팅
       if (this.reader === reader) this.reader = null;
 
-      // readLoopActive가 아직 true이면 예상치 못한 끊김 (BT 강제 해제)
       if (this.readLoopActive) {
         this.readLoopActive = false;
         try { this.writer?.releaseLock(); } catch {}
         this.writer = null;
-        // port는 이미 닫혔으므로 close() 불필요
         this.port = null;
         this.onDisconnectCb?.();
       }
     }
   }
 
-  // ─── 물리적 장치 제거 이벤트 ────────────────
   private _onPortHardDisconnect() {
-    // 루프의 finally가 먼저 처리했으면 readLoopActive는 이미 false
     if (!this.readLoopActive) return;
     this.readLoopActive = false;
     this.reader = null;
@@ -187,7 +195,6 @@ export class RobotSerial {
     this.onDisconnectCb?.();
   }
 
-  // ─── 유틸 ────────────────────────────────────
   get isConnected() { return this.port !== null; }
   static isSupported() {
     return typeof navigator !== "undefined" && "serial" in (navigator as any);
