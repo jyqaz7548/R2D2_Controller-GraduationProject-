@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose가 테마를 처리하므로 최소한의 XML 테마만 선언 -->
+    <style name="Theme.R2D2Controller" parent="android:Theme.Material.NoTitleBar">
+        <item name="android:windowBackground">@color/dark_bg</item>
+        <item name="android:statusBarColor">@color/dark_bg</item>
+        <item name="android:navigationBarColor">@color/dark_bg</item>
+    </style>
+</resources>
