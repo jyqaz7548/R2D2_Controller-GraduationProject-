@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.r2d2.controller.RobotCommands
 import com.r2d2.controller.bluetooth.BluetoothService
 import com.r2d2.controller.bluetooth.BtState
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
