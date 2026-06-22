@@ -66,6 +66,7 @@ fun ControllerScreen(
     onSetSpeed: (SpeedPreset) -> Unit,
     onSetTargetBodyAngle: (Int) -> Unit,
     onBodyHome: () -> Unit,
+    onBodyZeroReset: () -> Unit,
     onEmergencyStop: () -> Unit,
     onSayHello: () -> Unit,
     onPlayMusic: () -> Unit,
@@ -131,6 +132,7 @@ fun ControllerScreen(
                 targetAngle  = targetBodyAngle,
                 onSetTarget  = onSetTargetBodyAngle,
                 onHome       = onBodyHome,
+                onZeroReset  = onBodyZeroReset,
             )
             PanelDivider()
         }
@@ -552,6 +554,7 @@ private fun TinBodyControl(
     targetAngle: Int,
     onSetTarget: (Int) -> Unit,
     onHome: () -> Unit,
+    onZeroReset: () -> Unit,
 ) {
     var sliderValue by remember(targetAngle) { mutableFloatStateOf(targetAngle.toFloat()) }
     val lastSendMs = remember { longArrayOf(0L) }
@@ -575,20 +578,40 @@ private fun TinBodyControl(
                 fontFamily = FontFamily.Monospace,
                 letterSpacing = 2.sp,
             )
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(SteelLight.copy(alpha = 0.3f))
-                    .border(1.5.dp, PanelBorder, RoundedCornerShape(4.dp))
-                    .clickable { onHome() }
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // 영점 초기화 버튼
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(ActiveAmber.copy(alpha = 0.1f))
+                        .border(1.5.dp, ActiveAmber.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
+                        .clickable { onZeroReset() }
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
                 ) {
-                    Icon(Icons.Filled.Home, null, tint = CreamText, modifier = Modifier.size(13.dp))
-                    Text("HOME", color = CreamText, fontSize = 11.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Icon(Icons.Filled.Adjust, null, tint = ActiveAmber, modifier = Modifier.size(13.dp))
+                        Text("ZERO", color = ActiveAmber, fontSize = 11.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                    }
+                }
+                // 원점 복귀 버튼
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(SteelLight.copy(alpha = 0.3f))
+                        .border(1.5.dp, PanelBorder, RoundedCornerShape(4.dp))
+                        .clickable { onHome() }
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Icon(Icons.Filled.Home, null, tint = CreamText, modifier = Modifier.size(13.dp))
+                        Text("HOME", color = CreamText, fontSize = 11.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }

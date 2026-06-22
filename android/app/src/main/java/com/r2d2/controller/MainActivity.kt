@@ -53,6 +53,7 @@ class MainActivity : ComponentActivity() {
                     onSetSpeed           = vm::setSpeed,
                     onSetTargetBodyAngle = vm::setTargetBodyAngle,
                     onBodyHome           = vm::bodyHome,
+                    onBodyZeroReset      = vm::bodyZeroReset,
                     onEmergencyStop      = vm::emergencyStop,
                     onSayHello           = vm::sayHello,
                     onPlayMusic          = vm::playMusic,

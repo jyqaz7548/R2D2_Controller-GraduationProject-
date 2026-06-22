@@ -8,10 +8,13 @@ import androidx.lifecycle.viewModelScope
 import com.r2d2.controller.RobotCommands
 import com.r2d2.controller.bluetooth.BluetoothService
 import com.r2d2.controller.bluetooth.BtState
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 enum class SpeedPreset(val label: String, val mult: Float) {
     LOW("LOW", 0.4f),
@@ -48,7 +51,8 @@ class ControllerViewModel(app: Application) : AndroidViewModel(app) {
     val targetBodyAngle = _targetBodyAngle.asStateFlow()
 
     // ── 기타 ───────────────────────────────────────────────────────────
-    private var lastCmd = ""
+    @Volatile private var lastCmd = ""                  // IO/Main 교차 읽기 안전
+    private val btMutex = Mutex()                       // BT 쓰기 직렬화용 뮤텍스
 
     // ─────────────────────────────────────────────────────────────────
     init {
@@ -73,17 +77,32 @@ class ControllerViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
 
+        // 워치독 keepalive — 조이스틱 고정 중 400ms마다 현재 명령 재전송
+        // (앱이 중복 명령을 차단하지만 아두이노 워치독(1000ms)보다 짧게 유지)
+        viewModelScope.launch(Dispatchers.IO) {
+            val motionPrefixes = setOf('F', 'B', 'L', 'R')
+            while (true) {
+                delay(400)
+                val cmd = lastCmd
+                if (_isManualMode.value && cmd.isNotEmpty() && cmd[0] in motionPrefixes) {
+                    btMutex.withLock { bluetoothService.send(cmd) }  // 뮤텍스로 직렬화
+                }
+            }
+        }
+
         // 연결 상태 감시
         viewModelScope.launch {
             var prev: BtState = BtState.Disconnected
             bluetoothService.state.collect { s ->
                 if (prev !is BtState.Connected && s is BtState.Connected) {
-                    send(RobotCommands.manualMode())
+                    send(RobotCommands.manualMode())   // 수동 모드 진입
+                    send(RobotCommands.connected())    // 연결 확인음 (0011.mp3)
                 }
                 if (s is BtState.Disconnected) {
                     _isTracking.value = false
                     _bodyAngle.value = 0
                     _targetBodyAngle.value = 0
+                    lastCmd = ""   // 재연결 시 keepalive 자동 주행 방지
                 }
                 prev = s
             }
@@ -163,13 +182,22 @@ class ControllerViewModel(app: Application) : AndroidViewModel(app) {
         send(RobotCommands.bodyHome())
     }
 
+    /** 현재 위치를 0도로 수동 영점 초기화 (I 명령) — 로봇을 정면으로 맞춘 후 호출 */
+    fun bodyZeroReset() {
+        _bodyAngle.value = 0
+        _targetBodyAngle.value = 0
+        send(RobotCommands.bodyZeroReset())
+    }
+
     // ─── 내부 ────────────────────────────────────────────────────────
     val pairedDevices get() = bluetoothService.pairedDevices
     val isBluetoothEnabled get() = bluetoothService.isBluetoothEnabled
     val isAdapterAvailable get() = bluetoothService.isAdapterAvailable
 
     private fun send(cmd: String) {
-        viewModelScope.launch { bluetoothService.send(cmd) }
+        viewModelScope.launch(Dispatchers.IO) {
+            btMutex.withLock { bluetoothService.send(cmd) }
+        }
     }
 
     override fun onCleared() {

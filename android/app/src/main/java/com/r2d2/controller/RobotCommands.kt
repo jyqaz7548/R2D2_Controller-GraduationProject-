@@ -38,14 +38,16 @@ object RobotCommands {
     fun dance()         = "3"   // 0009 댄스
     fun shutdown()      = "Z"   // 0012 종료음 (연결 해제 직전 전송)
     fun emergencyStop() = "E"   // 비상정지 — 모든 모터·사운드 즉시 정지
+    fun connected()     = "K"   // 블루투스 연결 확인음 (연결 직후 전송)
 
     // ── 상체 제어 ───────────────────────────────────────────────────────
     /** v6: 절대 각도로 직접 이동 (-350 ~ +350) */
     fun bodyGoto(angle: Int)  = "G${angle.coerceIn(-350, 350)}"
     fun bodyRight()    = "T"   // 시계방향 15도 (하위 호환)
     fun bodyLeft()     = "U"   // 반시계방향 15도 (하위 호환)
-    fun bodyHome()     = "H"   // 원점 복귀
-    fun clearTarget()  = "C"   // 타겟 초기화
+    fun bodyHome()      = "H"   // 원점 복귀
+    fun bodyZeroReset() = "I"   // 현재 위치를 0도로 수동 영점 초기화
+    fun clearTarget()   = "C"   // 타겟 초기화
 
     /**
      * 조이스틱 XY → 이동 명령
